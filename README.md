@@ -50,7 +50,7 @@ This dashboard provides solar energy stakeholders with accurate photovoltaic pro
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Mohamed-Lr/Pv-Power-Predictor.git
+git clone https://github.com/Mohammed-Lr/Pv-Power-Predictor.git
 cd Pv-Power-Predictor
 ```
 
@@ -211,7 +211,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Support
 
 For questions, issues, or contributions:
-- **Issues**: [GitHub Issues](https://github.com/Mohamed-Lr/Pv-Power-Predictor/issues)
+- **Issues**: [GitHub Issues](https://github.com/Mohammed-Lr/Pv-Power-Predictor/issues)
 - **Documentation**: This README and inline code comments
 - **API Reference**: Backend Flask application documentation
 
