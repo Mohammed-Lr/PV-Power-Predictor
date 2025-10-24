@@ -1,0 +1,8 @@
+# Exclude Jupyter notebooks from language statistics
+*.ipynb linguist-documentation
+
+# Exclude data files from language statistics
+*.csv linguist-generated
+
+# Mark model files as binary
+*.pkl binary
