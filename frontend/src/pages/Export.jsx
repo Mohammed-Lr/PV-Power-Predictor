@@ -1,10 +1,9 @@
 import React, { useState, useContext } from 'react';
-import { Download, FileSpreadsheet, AlertTriangle, CheckCircle, Calendar, MapPin, Loader2, Database } from 'lucide-react';
+import { Download, FileSpreadsheet, AlertTriangle, CheckCircle, Calendar, MapPin, Loader2, Database, Zap } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 
 const Export = () => {
   const { predictions, summary, metadata } = useContext(AppContext);
-  
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -136,6 +135,16 @@ const Export = () => {
                 <p className="text-xs text-green-700">Coordinates</p>
               </div>
 
+              {/* Added Capacity Card */}
+              <div className="bg-white rounded-lg p-3 border border-green-200">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Zap className="w-4 h-4 text-green-600" />
+                  <span className="font-medium text-green-800">System Capacity</span>
+                </div>
+                <p className="text-lg font-bold text-green-900">{metadata?.capacity} kW</p>
+                <p className="text-xs text-green-700">Installed Power</p>
+              </div>
+
               <div className="bg-white rounded-lg p-3 border border-green-200">
                 <div className="flex items-center space-x-2 mb-2">
                   <Calendar className="w-4 h-4 text-green-600" />
@@ -145,15 +154,6 @@ const Export = () => {
                   {formatDate(predictions[0]?.date)} - {formatDate(predictions[predictions.length - 1]?.date)}
                 </p>
                 <p className="text-xs text-green-700">{summary?.total_days} days</p>
-              </div>
-
-              <div className="bg-white rounded-lg p-3 border border-green-200">
-                <div className="flex items-center space-x-2 mb-2">
-                  <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                  <span className="font-medium text-green-800">File Format</span>
-                </div>
-                <p className="text-lg font-bold text-green-900">Excel</p>
-                <p className="text-xs text-green-700">Multi-sheet workbook</p>
               </div>
             </div>
           </div>

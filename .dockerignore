@@ -1,0 +1,14 @@
+# Ignore frontend dependencies (The 179MB culprit)
+frontend/node_modules
+frontend/build
+
+# Ignore backend dependencies and cache
+backend/venv
+backend/env
+backend/__pycache__
+backend/*.pyc
+
+# Ignore git and system files
+.git
+.gitignore
+.DS_Store

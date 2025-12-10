@@ -23,23 +23,22 @@ class ApiError extends Error {
 // Generic request handler with error handling
 const makeRequest = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
-  
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
     },
     ...options
   };
-  
+
   try {
     const response = await fetch(url, defaultOptions);
-    
+
     // Handle different response types
     const contentType = response.headers.get('content-type');
-    
+
     if (!response.ok) {
       let errorMessage = `Request failed with status ${response.status}`;
-      
+
       // Try to extract error message from response
       try {
         if (contentType && contentType.includes('application/json')) {
@@ -55,7 +54,7 @@ const makeRequest = async (endpoint, options = {}) => {
       
       throw new ApiError(errorMessage, response.status, endpoint);
     }
-    
+
     // Handle blob responses (for file downloads)
     if (contentType && contentType.includes('application/vnd.openxmlformats')) {
       return {
@@ -63,20 +62,20 @@ const makeRequest = async (endpoint, options = {}) => {
         headers: response.headers
       };
     }
-    
+
     // Handle JSON responses
     if (contentType && contentType.includes('application/json')) {
       return await response.json();
     }
-    
+
     // Handle text responses
     return await response.text();
-    
+
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
     }
-    
+
     // Network or other fetch errors
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       throw new ApiError(
@@ -85,7 +84,7 @@ const makeRequest = async (endpoint, options = {}) => {
         endpoint
       );
     }
-    
+
     throw new ApiError(
       error.message || 'An unexpected error occurred',
       0,
@@ -117,7 +116,7 @@ export const validateLocation = async (latitude, longitude) => {
   if (longitude < -180 || longitude > 180) {
     throw new ApiError('Longitude must be between -180 and 180 degrees', 400, ENDPOINTS.validateLocation);
   }
-  
+
   return makeRequest(ENDPOINTS.validateLocation, {
     method: 'POST',
     body: JSON.stringify({
@@ -128,43 +127,49 @@ export const validateLocation = async (latitude, longitude) => {
 };
 
 // Generate predictions
-export const generatePredictions = async (latitude, longitude, startDate, endDate) => {
+export const generatePredictions = async (latitude, longitude, capacity, startDate, endDate) => {
   // Input validation
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
     throw new ApiError('Latitude and longitude must be numbers', 400, ENDPOINTS.predictions);
   }
-  
+
+  // Capacity validation
+  if (typeof capacity !== 'number' || capacity <= 0) {
+    throw new ApiError('Capacity must be a positive number', 400, ENDPOINTS.predictions);
+  }
+
   if (!startDate || !endDate) {
     throw new ApiError('Start date and end date are required', 400, ENDPOINTS.predictions);
   }
-  
+
   // Date validation
   const start = new Date(startDate);
   const end = new Date(endDate);
   const today = new Date();
-  
+
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
     throw new ApiError('Invalid date format', 400, ENDPOINTS.predictions);
   }
-  
+
   if (start >= end) {
     throw new ApiError('Start date must be before end date', 400, ENDPOINTS.predictions);
   }
-  
+
   if (end > today) {
     throw new ApiError('End date cannot be in the future', 400, ENDPOINTS.predictions);
   }
-  
+
   const daysDiff = (end - start) / (1000 * 60 * 60 * 24);
   if (daysDiff > 365) {
     throw new ApiError('Date range cannot exceed 1 year', 400, ENDPOINTS.predictions);
   }
-  
+
   return makeRequest(ENDPOINTS.predictions, {
     method: 'POST',
     body: JSON.stringify({
       latitude,
       longitude,
+      capacity,
       start_date: startDate,
       end_date: endDate
     })
@@ -176,18 +181,18 @@ export const exportPredictions = async (predictions, summary, metadata) => {
   if (!predictions || !Array.isArray(predictions) || predictions.length === 0) {
     throw new ApiError('No prediction data available to export', 400, ENDPOINTS.export);
   }
-  
+
   const exportData = {
     predictions,
     summary: summary || {},
     metadata: metadata || {}
   };
-  
+
   const response = await makeRequest(ENDPOINTS.export, {
     method: 'POST',
     body: JSON.stringify(exportData)
   });
-  
+
   return response;
 };
 
@@ -239,7 +244,7 @@ export const handleApiError = (error) => {
       isNetworkError: error.status === 0
     };
   }
-  
+
   return {
     message: error.message || 'An unexpected error occurred',
     status: 0,

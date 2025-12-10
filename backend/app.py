@@ -16,8 +16,8 @@ model_handler = None
 def load_model():
     global model_handler
     try:
-        # Update the model path to match your saved ensemble model
-        model_handler = PVModelHandler("weighted_ensemble_model.pkl")  # Changed from "your_pv_model.pkl"
+        # Update the model path to match your saved model
+        model_handler = PVModelHandler("final_pv_model.pkl")
         print(f"✅ Model handler initialized successfully")
     except Exception as e:
         print(f"❌ Error loading model handler: {e}")
@@ -36,7 +36,7 @@ def get_model_metrics():
         "temporal_coverage": "2020-present (~4-day delay)",
         "spatial_coverage": "Global",
         "training_period": "2023-06-01 to 2025-07-31",
-        "features_count": "25+ meteorological parameters",
+        "features_count": "18 features (inc. Capacity)",
         "performance_metrics": {
             "status": "Model loaded and ready",
             "data_quality": "High (NASA validated)",
@@ -44,14 +44,14 @@ def get_model_metrics():
             "prediction_unit": "kWh"
         },
         "parameters_used": [
-            "Global Horizontal Irradiance",
-            "Direct Normal Irradiance", 
-            "Temperature at 2m",
-            "Cloud Amount",
-            "Clearness Index",
+            "System Capacity (kWp)",
+            "Temperature (2m)",
             "Wind Speed",
-            "Relative Humidity",
-            "And 18+ additional parameters"
+            "Precipitation",
+            "Humidity",
+            "Solar Irradiance (GHI, DNI, Diffuse)",
+            "Cloud Amount",
+            "Thermal Radiation"
         ],
         "geographic_info": {
             "coordinate_system": "WGS84",
@@ -75,9 +75,10 @@ def validate_location():
         
         if not (-90 <= latitude <= 90):
             return jsonify({"error": "Latitude must be between -90 and 90"}), 400
+        
         if not (-180 <= longitude <= 180):
             return jsonify({"error": "Longitude must be between -180 and 180"}), 400
-        
+            
         availability = validate_location_availability(latitude, longitude)
         return jsonify(availability)
         
@@ -88,35 +89,36 @@ def validate_location():
 def generate_predictions():
     if model_handler is None or not model_handler.is_loaded:
         return jsonify({"error": "Model not loaded"}), 500
-    
+        
     try:
         data = request.json
         latitude = float(data['latitude'])
         longitude = float(data['longitude'])
+        capacity = float(data.get('capacity', 1.0)) # Default to 1.0 if not provided
         start_date = data['start_date']
         end_date = data['end_date']
         
         if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
             return jsonify({"error": "Invalid coordinates"}), 400
-        
+            
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
         
         if start_dt >= end_dt:
             return jsonify({"error": "Start date must be before end date"}), 400
-        
+            
         if (end_dt - start_dt).days > 365:
             return jsonify({"error": "Date range cannot exceed 1 year"}), 400
-        
-        print(f"🚀 Generating predictions for ({latitude}, {longitude}) from {start_date} to {end_date}")
+            
+        print(f"🚀 Generating predictions for ({latitude}, {longitude}) Capacity: {capacity}kW from {start_date} to {end_date}")
         
         df = get_pv_data_for_dashboard(latitude, longitude, start_date, end_date)
         
         if df is None or df.empty:
             return jsonify({"error": "No NASA POWER data available for this location and date range"}), 400
-        
-        # Use model handler for predictions
-        predictions_kwh = model_handler.predict(df)
+            
+        # Use model handler for predictions, passing capacity
+        predictions_kwh = model_handler.predict(df, capacity=capacity)
         
         mad_per_kwh = 1.2
         financial_savings = model_handler.calculate_financial_savings(predictions_kwh, mad_per_kwh)
@@ -125,12 +127,12 @@ def generate_predictions():
         for i, (date, pred, savings) in enumerate(zip(df.index, predictions_kwh, financial_savings)):
             results.append({
                 "date": date.strftime('%Y-%m-%d'),
-                "pv_production_kwh": round(float(pred), 2),
-                "financial_savings_mad": round(float(savings), 2),
+                "pv_production_kwh": round(float(pred), 1),       # Rounded to 1 decimal
+                "financial_savings_mad": round(float(savings), 1), # Rounded to 1 decimal
                 "weather_data": {k: round(float(v), 3) if pd.notna(v) else None 
                                for k, v in df.iloc[i].to_dict().items()}
             })
-        
+            
         summary = get_data_summary_for_dashboard(df)
         
         # Use model handler for prediction summary
@@ -149,8 +151,9 @@ def generate_predictions():
             "summary": combined_summary,
             "metadata": {
                 "location": f"{latitude}, {longitude}",
+                "capacity": capacity,
                 "conversion_rate": f"{mad_per_kwh} MAD/kWh",
-                "model": "First pv model",
+                "model": "Final PV Model",
                 "data_source": "NASA POWER GEOS-IT"
             }
         }
@@ -172,7 +175,7 @@ def export_data():
         
         if not predictions:
             return jsonify({"error": "No prediction data provided"}), 400
-        
+            
         predictions_df = pd.DataFrame(predictions)
         
         if 'weather_data' in predictions_df.columns:
@@ -181,7 +184,7 @@ def export_data():
             export_df = pd.concat([predictions_df, weather_df], axis=1)
         else:
             export_df = predictions_df
-        
+            
         summary_df = pd.DataFrame([summary])
         metadata_df = pd.DataFrame([metadata])
         
@@ -190,7 +193,7 @@ def export_data():
             export_df.to_excel(writer, sheet_name='Predictions', index=False)
             summary_df.to_excel(writer, sheet_name='Summary', index=False)
             metadata_df.to_excel(writer, sheet_name='Metadata', index=False)
-        
+            
         output.seek(0)
         
         location = metadata.get('location', 'unknown')
@@ -226,7 +229,7 @@ def detailed_model_health():
     """Detailed model health check endpoint"""
     if model_handler is None:
         return jsonify({"error": "Model handler not initialized"}), 500
-    
+        
     health_report = model_handler.validate_model_health()
     metrics = model_handler.get_model_metrics()
     
@@ -245,7 +248,7 @@ def reload_model():
             model_handler.reload_model()
         else:
             load_model()
-        
+            
         if model_handler and model_handler.is_loaded:
             return jsonify({
                 "success": True,

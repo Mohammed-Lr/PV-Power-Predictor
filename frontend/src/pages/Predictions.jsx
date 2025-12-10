@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { MapPin, Calendar, Zap, DollarSign, TrendingUp, CloudSun, AlertTriangle, Loader2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import { AppContext } from '../context/AppContext';
+import { generatePredictions } from '../services/api';
 
 const Predictions = () => {
   const { predictions, setPredictions, summary, setSummary, metadata, setMetadata } = useContext(AppContext);
@@ -9,17 +10,18 @@ const Predictions = () => {
   const [formData, setFormData] = useState({
     latitude: '',
     longitude: '',
+    capacity: '',
     startDate: '',
     endDate: ''
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
 
   const validateForm = () => {
     const errors = {};
-    
+
     // Latitude validation
     const lat = parseFloat(formData.latitude);
     if (!formData.latitude) {
@@ -27,7 +29,7 @@ const Predictions = () => {
     } else if (isNaN(lat) || lat < -90 || lat > 90) {
       errors.latitude = 'Latitude must be between -90 and 90';
     }
-    
+
     // Longitude validation
     const lng = parseFloat(formData.longitude);
     if (!formData.longitude) {
@@ -35,7 +37,15 @@ const Predictions = () => {
     } else if (isNaN(lng) || lng < -180 || lng > 180) {
       errors.longitude = 'Longitude must be between -180 and 180';
     }
-    
+
+    // Capacity validation
+    const cap = parseFloat(formData.capacity);
+    if (!formData.capacity) {
+      errors.capacity = 'System capacity is required';
+    } else if (isNaN(cap) || cap <= 0) {
+      errors.capacity = 'Capacity must be a positive number';
+    }
+
     // Date validation
     if (!formData.startDate) {
       errors.startDate = 'Start date is required';
@@ -43,26 +53,26 @@ const Predictions = () => {
     if (!formData.endDate) {
       errors.endDate = 'End date is required';
     }
-    
+
     if (formData.startDate && formData.endDate) {
       const start = new Date(formData.startDate);
       const end = new Date(formData.endDate);
       const today = new Date();
-      
+
       if (start >= end) {
         errors.endDate = 'End date must be after start date';
       }
-      
+
       if (end > today) {
         errors.endDate = 'End date cannot be in the future';
       }
-      
+
       const daysDiff = (end - start) / (1000 * 60 * 60 * 24);
       if (daysDiff > 365) {
         errors.endDate = 'Date range cannot exceed 1 year';
       }
     }
-    
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -73,7 +83,7 @@ const Predictions = () => {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear validation error when user starts typing
     if (validationErrors[name]) {
       setValidationErrors(prev => ({
@@ -85,35 +95,22 @@ const Predictions = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (!validateForm()) {
       return;
     }
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      const response = await fetch('http://localhost:5000/api/predictions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          latitude: parseFloat(formData.latitude),
-          longitude: parseFloat(formData.longitude),
-          start_date: formData.startDate,
-          end_date: formData.endDate
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
+      const data = await generatePredictions(
+        parseFloat(formData.latitude),
+        parseFloat(formData.longitude),
+        parseFloat(formData.capacity),
+        formData.startDate,
+        formData.endDate
+      );
+
       if (data.success) {
         setPredictions(data.predictions);
         setSummary(data.summary);
@@ -122,7 +119,6 @@ const Predictions = () => {
       } else {
         throw new Error('Prediction generation failed');
       }
-      
     } catch (err) {
       setError(err.message);
       console.error('Error generating predictions:', err);
@@ -174,7 +170,7 @@ const Predictions = () => {
             <MapPin className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Location & Date Selection</h2>
+            <h2 className="text-xl font-semibold text-gray-900">System & Location Configuration</h2>
             <p className="text-gray-600">Configure your prediction parameters</p>
           </div>
         </div>
@@ -224,6 +220,28 @@ const Predictions = () => {
               />
               {validationErrors.longitude && (
                 <p className="text-red-500 text-sm mt-1">{validationErrors.longitude}</p>
+              )}
+            </div>
+
+             {/* Capacity Input */}
+             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                System Capacity (kWp)
+              </label>
+              <input
+                type="number"
+                name="capacity"
+                value={formData.capacity}
+                onChange={handleInputChange}
+                step="0.1"
+                min="0.1"
+                placeholder="e.g., 5"
+                className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                  validationErrors.capacity ? 'border-red-500' : ''
+                }`}
+              />
+              {validationErrors.capacity && (
+                <p className="text-red-500 text-sm mt-1">{validationErrors.capacity}</p>
               )}
             </div>
 
@@ -326,7 +344,7 @@ const Predictions = () => {
                   <h3 className="font-semibold text-green-900">Total Production</h3>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-green-900">{summary?.total_production_kwh} kWh</p>
+              <p className="text-2xl font-bold text-green-900">{summary?.total_production_kwh.toFixed(1)} kWh</p>
             </div>
 
             <div className="bg-gradient-to-br from-yellow-50 to-orange-100 rounded-xl p-6 border border-yellow-200">
@@ -336,7 +354,7 @@ const Predictions = () => {
                   <h3 className="font-semibold text-orange-900">Total Savings</h3>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-orange-900">{summary?.total_savings_mad} MAD</p>
+              <p className="text-2xl font-bold text-orange-900">{summary?.total_savings_mad.toFixed(1)} MAD</p>
             </div>
 
             <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
@@ -346,7 +364,7 @@ const Predictions = () => {
                   <h3 className="font-semibold text-purple-900">Avg Daily</h3>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-purple-900">{summary?.avg_daily_production_kwh} kWh</p>
+              <p className="text-2xl font-bold text-purple-900">{summary?.avg_daily_production_kwh.toFixed(1)} kWh</p>
             </div>
           </div>
 
@@ -397,10 +415,14 @@ const Predictions = () => {
           {metadata && (
             <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-indigo-900 mb-4">Prediction Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                 <div>
                   <span className="font-medium text-indigo-800">Location:</span>
                   <span className="ml-2 text-indigo-700">{metadata.location}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-indigo-800">Capacity:</span>
+                  <span className="ml-2 text-indigo-700">{metadata.capacity} kWp</span>
                 </div>
                 <div>
                   <span className="font-medium text-indigo-800">Conversion Rate:</span>

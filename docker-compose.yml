@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    container_name: pv-dashboard-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+    volumes:
+      # Optional: Mounts code for live updates during development
+      - ./backend:/app
+    networks:
+      - pv-network
+
+  frontend:
+    build: ./frontend
+    container_name: pv-dashboard-frontend
+    ports:
+      - "3000:80" # Map host port 3000 to container port 80 (Nginx)
+    depends_on:
+      - backend
+    environment:
+      # React runs in the browser, so it needs to access localhost:5000
+      - REACT_APP_API_URL=http://localhost:5000
+    networks:
+      - pv-network
+
+networks:
+  pv-network:
+    driver: bridge
